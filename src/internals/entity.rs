@@ -203,16 +203,29 @@ impl LocationMap {
 
     /// Removes an entity from the location map.
     pub fn remove(&mut self, entity: Entity) -> Option<EntityLocation> {
+        use std::collections::hash_map::Entry;
+
         let block = entity.0.get() / BLOCK_SIZE;
         let idx = (entity.0.get() % BLOCK_SIZE) as usize;
-        if let Some(loc) = self.blocks.get_mut(&block).and_then(|v| v.get_mut(idx)) {
-            let original = loc.take();
-            if original.is_some() {
-                self.len -= 1;
+
+        let r = if let Entry::Occupied(mut block_entry) = self.blocks.entry(block) {
+            let block_sloice = block_entry.get_mut();
+
+            let removed = block_sloice.get_mut(idx).and_then(Option::take);
+
+            if removed.is_some() && block_sloice.iter().all(Option::is_none) {
+                block_entry.remove();
             }
-            original
+
+            removed
         } else {
             None
+        };
+
+        if r.is_some() {
+            self.len -= 1;
         }
+
+        r
     }
 }
