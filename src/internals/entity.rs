@@ -33,10 +33,6 @@ impl Clone for Entity {
 const BLOCK_SIZE: u64 = 16;
 const BLOCK_SIZE_USIZE: usize = BLOCK_SIZE as usize;
 
-// Always divisible by BLOCK_SIZE.
-// Safety: This must never be 0, so skip the first block
-static NEXT_ENTITY: AtomicU64 = AtomicU64::new(BLOCK_SIZE);
-
 /// An iterator which yields new entity IDs.
 #[derive(Debug)]
 pub struct Allocate {
@@ -62,20 +58,27 @@ impl Iterator for Allocate {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
+        // Get next block whenever the block ends.
         if self.next % BLOCK_SIZE == 0 {
-            // This is either the first block, or we overflowed to the next block.
-            self.next = NEXT_ENTITY.fetch_add(BLOCK_SIZE, Ordering::Relaxed);
-            debug_assert_eq!(self.next % BLOCK_SIZE, 0);
+            static NEXT_ENTITY_BLOCK_START: AtomicU64 = AtomicU64::new(1);
+
+            // Note: since BLOCK_SIZE is divisible by 2
+            // and NEXT_ENTITY_BLOCK_START starts at 1,
+            // this skips one entity index per block.
+            // It is not the best possible performance,
+            // but zero will be skipped even on overflow and not just on start.
+            self.next = NEXT_ENTITY_BLOCK_START.fetch_add(BLOCK_SIZE, Ordering::Relaxed);
+            debug_assert_eq!(self.next % BLOCK_SIZE, 1);
         }
 
-        // Safety: self.next can't be 0 as long as the first block is skipped,
-        // and no overflow occurs in NEXT_ENTITY
-        let entity = unsafe {
-            debug_assert_ne!(self.next, 0);
-            Entity(NonZeroU64::new_unchecked(self.next))
-        };
+        // `NonZeroU64::new(self.next).map(Entity)` would give the same generated code
+        // as `unsafe { Some(unchecked) }` for *this* function.
+        // However, there may a difference when you match the resulting inlined `Option`:
+        // if its discriminant is always `Some`,
+        // then `None` case could be simply removed from generated code.
+        let entity = NonZeroU64::new(self.next).map(Entity);
         self.next += 1;
-        Some(entity)
+        entity
     }
 
     #[inline]
