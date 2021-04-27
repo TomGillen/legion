@@ -45,5 +45,5 @@ pub use crate::internals::serialize::{
     de::WorldDeserializer,
     id::{set_entity_serializer, Canon, CustomEntitySerializer, EntityName, EntitySerializer},
     ser::{SerializableWorld, WorldSerializer},
-    AutoTypeKey, DeserializeIntoWorld, DeserializeNewWorld, Registry, TypeKey, UnknownType,
+    AutoTypeKey, CustomEntitySerializer, DeserializeIntoWorld, DeserializeNewWorld, Registry, TypeKey, UnknownType,
 };
